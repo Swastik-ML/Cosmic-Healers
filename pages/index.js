@@ -5,10 +5,28 @@ import { supabase } from '../lib/supabaseClient';
 export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+    // Get the current session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Listen for changes in auth state
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      (async () => {
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -19,12 +37,9 @@ export default function Home() {
         else if (profile?.role === 'teacher') router.push('/teacher');
         else if (profile?.role === 'admin') router.push('/admin');
         else router.push('/dashboard');
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => authListener.subscription.unsubscribe();
-  }, [router]);
+      })();
+    }
+  }, [session, router]);
 
   if (loading) return <p>Loading...</p>;
 
